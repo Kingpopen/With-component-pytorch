@@ -1,7 +1,7 @@
 import os
 import torch
-from torch.utils.ffi import create_extension
-
+# from torch.utils.ffi import create_extension
+from torch.utils.cpp_extension import BuildExtension
 
 sources = ['src/crop_and_resize.c']
 headers = ['src/crop_and_resize.h']
@@ -25,7 +25,18 @@ sources = [os.path.join(this_file, fname) for fname in sources]
 headers = [os.path.join(this_file, fname) for fname in headers]
 extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 
-ffi = create_extension(
+# ffi = create_extension(
+#     '_ext.crop_and_resize',
+#     headers=headers,
+#     sources=sources,
+#     define_macros=defines,
+#     relative_to=__file__,
+#     with_cuda=with_cuda,
+#     extra_objects=extra_objects,
+#     extra_compile_args=extra_compile_args
+# )
+
+ffi = BuildExtension(
     '_ext.crop_and_resize',
     headers=headers,
     sources=sources,
