@@ -712,8 +712,8 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
 
     return rois, roi_gt_class_ids, deltas, masks
 
-#
-def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
+#add the layer to address the mluti-classes(damage and component)
+def detection_target_layer_component(proposals, gt_class_ids, gt_component_ids, gt_boxes, gt_masks, config):
     """Subsamples proposals and generates target box refinment, class_ids,
     and masks for each.
 
@@ -721,6 +721,9 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     proposals: [batch, N, (y1, x1, y2, x2)] in normalized coordinates. Might
                be zero padded if there are not enough proposals.
     gt_class_ids: [batch, MAX_GT_INSTANCES] Integer class IDs.
+
+    gt_component_ids: [batch, MAX_GT_INSTANCES] Integer component IDs.
+
     gt_boxes: [batch, MAX_GT_INSTANCES, (y1, x1, y2, x2)] in normalized
               coordinates.
     gt_masks: [batch, height, width, MAX_GT_INSTANCES] of boolean type
@@ -741,6 +744,10 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     # Currently only supports batchsize 1
     proposals = proposals.squeeze(0)
     gt_class_ids = gt_class_ids.squeeze(0)
+
+    # like the class we add component
+    gt_component_ids = gt_component_ids.squeeze(0)
+
     gt_boxes = gt_boxes.squeeze(0)
     gt_masks = gt_masks.squeeze(0)
 
@@ -1063,7 +1070,7 @@ class RPN(nn.Module):
         rpn_class_logits = self.conv_class(x)
 
         # Reshape to [batch, 2, anchors]
-        rpn_class_logits = rpn_class_logits.permute(0,2,3,1)
+        rpn_class_logits = rpn_class_logits.permute(0, 2, 3, 1)
         rpn_class_logits = rpn_class_logits.contiguous()
         rpn_class_logits = rpn_class_logits.view(x.size()[0], -1, 2)
 
@@ -1075,17 +1082,24 @@ class RPN(nn.Module):
         rpn_bbox = self.conv_bbox(x)
 
         # Reshape to [batch, 4, anchors]
-        rpn_bbox = rpn_bbox.permute(0,2,3,1)
+        rpn_bbox = rpn_bbox.permute(0, 2, 3, 1)
         rpn_bbox = rpn_bbox.contiguous()
         rpn_bbox = rpn_bbox.view(x.size()[0], -1, 4)
-
         return [rpn_class_logits, rpn_probs, rpn_bbox]
 
 
 ############################################################
 #  Feature Pyramid Network Heads
 ############################################################
-
+    '''                 =>Conv ==> Conv ==> Fc -> component
+        _________      /
+       |  |  |   |  ===                     ==>Fc -> BOX
+       |__|__|___|     \                   /
+                        =>Conv ==> Conv ==> 
+                                           \ 
+                                            ==>Fc -> class
+       '''
+# this is a classification head
 class Classifier(nn.Module):
     def __init__(self, depth, pool_size, image_shape, num_classes):
         super(Classifier, self).__init__()
@@ -1121,6 +1135,7 @@ class Classifier(nn.Module):
         mrcnn_bbox = mrcnn_bbox.view(mrcnn_bbox.size()[0], -1, 4)
 
         return [mrcnn_class_logits, mrcnn_probs, mrcnn_bbox]
+
 
 class Mask(nn.Module):
     def __init__(self, depth, pool_size, image_shape, num_classes):
